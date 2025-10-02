@@ -1,8 +1,8 @@
 {
   "name": "Hazers SMS Opt-In",
   "short_name": "Hazers SMS",
-  "start_url": "./index.html",
-  "scope": "./",
+  "start_url": "./",          // <— was / or /index.html
+  "scope": "./",              // <— keep it relative
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0f172a",
