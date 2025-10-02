@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SMS Opt-In</title>
+    <style>
+      /* Layout */
+      body { font-family: system-ui, Arial, sans-serif; max-width: 560px; margin: 24px auto; }
+      h2 { margin: 0 0 .25rem; }
+      label { font-weight: 600; }
+      input[type="tel"], input[type="text"] { width: 100%; padding: .7rem; margin: .35rem 0 1rem; }
+      button { padding: .65rem 1rem; cursor: pointer; }
+      button[disabled] { opacity:.7; cursor:not-allowed; }
+      .consent { display: flex; gap: .6rem; align-items: flex-start; margin: .6rem 0 1rem; }
+      .fine { font-size: .95rem; color: #444; margin: .25rem 0 1rem; }
+
+      /* Invalid highlights */
+      .invalid { border: 1px solid #f5c2c7 !important; background: #f8d7da33; border-radius: .5rem; }
+      input.invalid { outline: none; border: 1px solid #f5c2c7; background: #f8d7da33; border-radius: .35rem; }
+
+      /* Bootstrap-like alerts */
+      .alert {
+        display:none; align-items:flex-start; gap:.6rem;
+        padding:.75rem 1rem; margin-top:.75rem; border:1px solid transparent;
+        border-radius:.5rem; box-shadow:0 1px 2px rgba(0,0,0,.05);
+      }
+      .alert.show { display:flex; }
+      .alert-success { background:#d1e7dd; border-color:#badbcc; color:#0f5132; }
+      .alert-danger  { background:#f8d7da; border-color:#f5c2c7; color:#842029; }
+      .alert-info    { background:#cff4fc; border-color:#b6effb; color:#055160; }
+      .alert .close  { margin-left:auto; border:none; background:transparent; font-size:1.1rem; line-height:1; cursor:pointer; color:inherit; }
+
+      /* Small icons */
+      .icon { width:1.1rem; height:1.1rem; margin-top:.15rem; flex:0 0 auto; }
+    </style>
+  </head>
+  <body>
+    <h2>SMS Opt-In</h2>
+    <p class="fine">Enter your mobile number to receive SMS updates from Hazers Auto &amp; Truck Parts.</p>
+
+    <form id="f" novalidate>
+      <label for="phone">Mobile Number</label>
+      <input id="phone"
+             type="tel"
+             inputmode="tel"
+             autocomplete="tel"
+             required
+             placeholder="+1 701-555-0123"
+             title="Enter a valid US mobile (e.g., +17015550123 or (701) 555-0123)" />
+
+      <div class="consent" id="consentWrap">
+        <input id="consent" type="checkbox" required aria-describedby="consentText" />
+        <span id="consentText">
+          I agree to receive recurring SMS messages from Hazers Auto &amp; Truck Parts.
+          Message &amp; data rates may apply. Message frequency may vary.
+          Reply STOP to opt out; HELP for help. See
+          <a href="https://www.hazers.com/privacy-policy" target="_blank" rel="noopener">Privacy Policy</a>.
+        </span>
+      </div>
+
+      <button id="submitBtn" type="submit" aria-label="Submit">
+        Submit
+      </button>
+
+      <!-- Alert -->
+      <div id="status" class="alert" role="status" aria-live="polite" aria-atomic="true"></div>
+    </form>
+
+    <script>
+      const GAS_URL = "https://script.google.com/macros/s/AKfycbwPxXgLpBKq_ewPQDJ263oTy92fZqz69wo3NA3Uh3BtV4HZEzVghAk0EvczjMMZ1IHPJg/exec";
+
+      const pageUrl     = window.location.href;
+      const userAgent   = navigator.userAgent;
+      const statusEl    = document.getElementById('status');
+      const submitBtn   = document.getElementById('submitBtn');
+      const consentEl   = document.getElementById('consent');
+      const consentWrap = document.getElementById('consentWrap');
+      const phoneInput  = document.getElementById('phone');
+
+      function showAlert(type, html, autoHideMs) {
+        statusEl.className = 'alert alert-' + type + ' show';
+        const icon =
+          type === 'success' ? `
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path fill="currentColor" d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M6.97 10.97l5-5-.708-.708-4.293 4.293-2.232-2.232-.707.707 2.939 2.94z"/>
+            </svg>` :
+          type === 'danger' ? `
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path fill="currentColor" d="M8.982 1.566a1.13 1.13 0 0 0-1.964 0L.165 13.233c-.457.778.091 1.767.982 1.767h13.706c.89 0 1.438-.99.982-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+            </svg>` :
+          `
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path fill="currentColor" d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm.93-9.412-1 4.705a.5.5 0 0 1-.98-.218l1-4.705a.5.5 0 1 1 .98.218zM8 12a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/>
+            </svg>
+          `;
+        statusEl.innerHTML = `
+          ${icon}
+          <div>${html}</div>
+          <button class="close" type="button" aria-label="Close"
+                  onclick="statusEl.className='alert';statusEl.innerHTML=''">&times;</button>
+        `;
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (autoHideMs) setTimeout(() => { statusEl.className='alert'; statusEl.innerHTML=''; }, autoHideMs);
+      }
+
+      function setSubmitting(isSubmitting) {
+        submitBtn.disabled = isSubmitting;
+        submitBtn.textContent = isSubmitting ? 'Submitting…' : 'Submit';
+      }
+
+      // Client-side US phone normalization (to +1##########). Return null if invalid.
+      function normalizeUSInput(value) {
+        if (!value) return null;
+        const raw = String(value).trim();
+        if (/^\+1\d{10}$/.test(raw)) return raw; // already E.164 US
+        const digits = raw.replace(/\D+/g, '');
+        if (digits.length === 10) return `+1${digits}`;
+        if (digits.length === 11 && digits.startsWith('1')) return `+1${digits.slice(1)}`;
+        return null;
+      }
+
+      // Clear invalid highlights on input/checkbox changes
+      phoneInput.addEventListener('input', () => phoneInput.classList.remove('invalid'));
+      consentEl.addEventListener('change', () => consentWrap.classList.remove('invalid'));
+
+      document.getElementById('f').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const consentChecked = consentEl.checked;
+        const consentText    = document.getElementById('consentText').innerText.trim();
+        const normalizedPhone = normalizeUSInput(phoneInput.value);
+
+        // Validate consent first
+        if (!consentChecked) {
+          consentWrap.classList.add('invalid');
+          showAlert('danger', 'You must agree before submitting.');
+          consentEl.focus();
+          return;
+        }
+
+        // Validate phone
+        if (!normalizedPhone) {
+          phoneInput.classList.add('invalid');
+          phoneInput.setAttribute('aria-invalid', 'true');
+          showAlert('danger', 'Please enter a valid US mobile number. Example: <strong>+17015550123</strong>');
+          phoneInput.focus();
+          return;
+        } else {
+          phoneInput.removeAttribute('aria-invalid');
+        }
+
+        setSubmitting(true);
+        showAlert('info', 'Submitting…');
+
+        // Optional: capture public IP (remove if you don't need it)
+        const ip = await (async () => {
+          try {
+            const r = await fetch('https://api.ipify.org?format=json');
+            const j = await r.json();
+            return j.ip || '';
+          } catch { return ''; }
+        })();
+
+        try {
+          // Post as form-encoded to avoid CORS preflight; GAS reads e.parameter.*
+          const body = new URLSearchParams({
+            // if your doPost expects an action, include it (optional)
+            action: 'saveOptIn',
+            phone: normalizedPhone,
+            consentText,
+            ip,
+            userAgent,
+            pageUrl
+          });
+
+          const res = await fetch(GAS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+          });
+
+          // Your GAS should return JSON text: { ok:true } or { ok:false, error:"..." }
+          const text = await res.text();
+          let json;
+          try { json = JSON.parse(text); } catch { json = { ok:false, error: 'Invalid JSON from server', raw: text }; }
+
+          if (json && json.ok) {
+            showAlert('success', 'Opt-in received. Thank you!', 5000);
+            document.getElementById('f').reset();
+          } else {
+            showAlert('danger', 'Failed to save' + (json && json.error ? `: ${json.error}` : '.'));
+          }
+        } catch (err) {
+          showAlert('danger', 'Network error: ' + (err?.message || err));
+        } finally {
+          setSubmitting(false);
+        }
+      });
+    </script>
+  </body>
+</html>
